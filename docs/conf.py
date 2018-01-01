@@ -47,7 +47,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'pylava'
-copyright = '2017, Pandentia'
+copyright = '2017 - 2018, Pandentia'
 author = 'Pandentia'
 
 # The version info for the project you're documenting, acts as replacement for
