@@ -77,7 +77,7 @@ class Player:
         await self.conn._discord_stop(self.guild)
         self._playing = False
 
-    async def seek(self, position):
+    async def seek(self, position: float):
         """Seeks to a specific position in a track."""
         await self.conn._discord_seek(self.guild, position)
 
