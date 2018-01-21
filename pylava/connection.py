@@ -83,6 +83,27 @@ class Connection:
                 # noinspection PyProtectedMember
                 self._loop.create_task(player._process_event(data))
 
+    async def _discord_connection_handler(self):
+        async def panic(shard_id):
+            for guild in tuple(self._players):
+                if (guild >> 22) % self.bot.shard_count != shard_id:
+                    continue
+
+                player = self._players[guild]
+                if player is not None:
+                    await player.disconnect()
+                
+                del self._players[guild]
+
+        while self.connected:
+            shards_to_check = set([(x >> 22) % self.bot.shard_count for x in self._players])
+            for shard in shards_to_check:
+                ws = self._get_discord_ws(shard)
+                if ws is not None and ws.open:
+                    continue
+                await panic(shard)
+            await asyncio.sleep(0.1)
+
     async def _lava_validation_request(self, data):
         guild = self.bot.get_guild(int(data['guildId']))
         channel = data.get('channelId')
@@ -133,6 +154,7 @@ class Connection:
         }
         self._websocket = await websockets.connect(self._url, extra_headers=headers)
         self._loop.create_task(self._lava_event_processor())
+        self._loop.create_task(self._discord_connection_handler())
 
     async def query(self, query):
         """Query Lavalink."""
@@ -164,8 +186,9 @@ class Connection:
         self._players = {}  # this is why you shouldn't hold references to players for too long
 
     async def wait_until_ready(self):
+        """Waits indefinitely until the lavalink connection has been established."""
         while not self.connected:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)
 
     async def _send(self, **data):
         if not self.connected:
