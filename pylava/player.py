@@ -67,7 +67,7 @@ class Player:
         """
         Plays a track. If already playing, replaces the current track.
 
-        :param track: The base64 track ID from the :meth:`Connection.query`.
+        :param track: A base64 track ID returned by the :meth:`Connection.query` method.
         """
         await self.conn._discord_play(self.guild, track)
         self._playing = True
