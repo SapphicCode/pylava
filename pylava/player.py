@@ -66,6 +66,7 @@ class Player:
     async def play(self, track: str):
         """
         Plays a track. If already playing, replaces the current track.
+
         :param track: The base64 track ID from the :meth:`Connection.query`.
         """
         await self.conn._discord_play(self.guild, track)

@@ -159,6 +159,7 @@ class Connection:
     async def query(self, query: str) -> list:
         """
         Queries Lavalink. Returns a list of Track objects.
+
         :param query: The search query to make.
         """
         headers = {
