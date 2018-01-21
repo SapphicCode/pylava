@@ -145,7 +145,7 @@ class Connection:
         await ws.send(data['message'])
 
     async def connect(self):
-        """Connects to Lavalink."""
+        """Connects to Lavalink. Gets automatically called once when the Connection object is created."""
         await self.bot.wait_until_ready()
         headers = {
             'Authorization': self._auth,
@@ -156,8 +156,11 @@ class Connection:
         self._loop.create_task(self._lava_event_processor())
         self._loop.create_task(self._discord_connection_handler())
 
-    async def query(self, query):
-        """Query Lavalink."""
+    async def query(self, query: str) -> list:
+        """
+        Queries Lavalink. Returns a list of Track objects.
+        :param query: The search query to make.
+        """
         headers = {
             'Authorization': self._auth,
             'Accept': 'application/json'
@@ -186,7 +189,7 @@ class Connection:
         self._players = {}  # this is why you shouldn't hold references to players for too long
 
     async def wait_until_ready(self):
-        """Waits indefinitely until the lavalink connection has been established."""
+        """Waits indefinitely until the Lavalink connection has been established."""
         while not self.connected:
             await asyncio.sleep(0.01)
 
@@ -242,7 +245,7 @@ class Connection:
         position = int(position * 1000)
         await self._send(op='seek', guildId=guild_id, position=position)
 
-    def get_player(self, guild_id) -> Player:
+    def get_player(self, guild_id: int) -> Player:
         """
         Gets a Player class that abstracts away connection handling, among other things.
 

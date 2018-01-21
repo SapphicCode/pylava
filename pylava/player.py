@@ -9,8 +9,6 @@ class Player:
     def __init__(self, connection, guild_id: int):
         self.conn = connection
         self.guild = guild_id
-        # methods
-        self.query = self.conn.query
         # dynamic variables:
         self._channel = None
         self._paused = False
@@ -61,8 +59,15 @@ class Player:
         await self.conn._discord_disconnect(self.guild)
         self._channel = None
 
+    async def query(self, *args, **kwargs):
+        """Shortcut method for :meth:`Connection.query`."""
+        return await self.conn.query(*args, **kwargs)
+
     async def play(self, track: str):
-        """Plays a track. If already playing, replaces the current track."""
+        """
+        Plays a track. If already playing, replaces the current track.
+        :param track: The base64 track ID from the :meth:`Connection.query`.
+        """
         await self.conn._discord_play(self.guild, track)
         self._playing = True
 
