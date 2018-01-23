@@ -241,6 +241,7 @@ class Connection:
     async def _discord_volume(self, guild_id: int, level: int):
         level = max(min(level, 150), 0)
         await self._send(op='volume', guildId=guild_id, volume=level)
+        return level
 
     async def _discord_seek(self, guild_id: int, position: float):
         position = int(position * 1000)

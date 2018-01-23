@@ -14,6 +14,7 @@ class Player:
         self._paused = False
         self._playing = False
         self._position = None
+        self._volume = 100
 
         self.track_callback = None  # you can set this one
 
@@ -49,6 +50,11 @@ class Player:
         """Returns the player's stopped (neither playing nor paused) state."""
         return not self.playing and not self.paused
 
+    @property
+    def volume(self) -> int:
+        """Returns the player's volume."""
+        return self._volume
+
     async def connect(self, channel_id: int):
         """Connects the player to a Discord channel."""
         await self.conn._discord_connect(self.guild, channel_id)
@@ -78,6 +84,14 @@ class Player:
             return  # state's already set
         await self.conn._discord_pause(self.guild, paused)
         self._paused = paused
+
+    async def set_volume(self, volume: int):
+        """
+        Sets the player's volume.
+
+        :param volume: An integer between (and including) 0 and 150.
+        """
+        self._volume = await self.conn._discord_volume(self.guild, volume)
 
     async def stop(self):
         """Stops the player."""
