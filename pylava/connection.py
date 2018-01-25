@@ -202,7 +202,7 @@ class Connection:
         if not self.connected:
             raise Disconnected()  # refuse to send anything
 
-        if data.get('validationRes') and data.get('valid') is False:  # player connection failure handling
+        if data.get('op') == 'validationRes' and data.get('valid') is False:  # player connection failure handling
             self.get_player(int(data['guildId']))._channel = None
 
         if isinstance(data, dict):
