@@ -77,7 +77,8 @@ class Connection:
 
                 lag = time.time() - data['state']['time'] / 1000
                 player._position = data['state']['position'] / 1000 + lag
-                player._paused = False
+                # (apparently player updates also get sent to paused players
+                # player._paused = False
             if op == 'event':
                 player = self.get_player(int(data['guildId']))
                 # noinspection PyProtectedMember
