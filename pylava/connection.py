@@ -85,25 +85,30 @@ class Connection:
                 self._loop.create_task(player._process_event(data))
 
     async def _discord_connection_handler(self):
-        async def panic(shard_id):
+        def panicking(shard_id):
+            ws = self._get_discord_ws(shard_id)
+            if ws is not None and ws.open:
+                return False
+            return True
+
+        while self.connected:
+            await asyncio.sleep(0.1)
+
+            shards_to_check = {(x >> 22) % self.bot.shard_count for x in self._players}
+            shards_panicking = [x for x in shards_to_check if panicking(x)]
+
+            if not shards_panicking:
+                continue
+
             for guild in tuple(self._players):
-                if (guild >> 22) % self.bot.shard_count != shard_id:
+                if (guild >> 22) % self.bot.shard_count not in shards_panicking:
                     continue
 
                 player = self._players[guild]
                 if player is not None:
                     await player.disconnect()
-                
-                del self._players[guild]
 
-        while self.connected:
-            shards_to_check = set([(x >> 22) % self.bot.shard_count for x in self._players])
-            for shard in shards_to_check:
-                ws = self._get_discord_ws(shard)
-                if ws is not None and ws.open:
-                    continue
-                await panic(shard)
-            await asyncio.sleep(0.1)
+                del self._players[guild]
 
     async def _lava_validation_request(self, data):
         guild = self.bot.get_guild(int(data['guildId']))
