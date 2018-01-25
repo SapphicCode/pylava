@@ -1,16 +1,15 @@
 import asyncio
 import json
+import logging
 import time
 from typing import Union
 
-import logging
 import aiohttp
 import websockets
 from discord.ext import commands
 
 from .errors import Disconnected
 from .player import Player
-
 
 logger = logging.getLogger('pylava')
 logger.addHandler(logging.NullHandler())
