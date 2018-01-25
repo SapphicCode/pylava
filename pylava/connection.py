@@ -12,8 +12,6 @@ from .player import Player
 
 
 class Connection:
-    _websocket = None
-
     def __init__(self, bot: Union[commands.Bot, commands.AutoShardedBot],
                  password: str, ws_url: str, rest_url: str):
         bot.add_listener(self._handler, 'on_socket_response')
