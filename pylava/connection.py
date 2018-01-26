@@ -151,6 +151,8 @@ class Connection:
         ws = self._get_discord_ws(data['shardId'])
         if ws is None:
             return
+        if not ws.open:
+            return
         await ws.send(data['message'])
 
     async def connect(self):
