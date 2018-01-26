@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import time
 from typing import Union
 
@@ -9,6 +10,9 @@ from discord.ext import commands
 
 from .errors import Disconnected
 from .player import Player
+
+logger = logging.getLogger('pylava')
+logger.addHandler(logging.NullHandler())
 
 
 class Connection:
@@ -57,6 +61,7 @@ class Connection:
             except websockets.ConnectionClosed or AttributeError:
                 return  # oh well
 
+            logger.debug('Received a payload from Lavalink: {}'.format(data))
             op = data.get('op')
 
             if op == 'validationReq':
@@ -159,6 +164,7 @@ class Connection:
         self._websocket = await websockets.connect(self._url, extra_headers=headers)
         self._loop.create_task(self._lava_event_processor())
         self._loop.create_task(self._discord_connection_handler())
+        logger.info('Successfully connected to Lavalink.')
 
     async def query(self, query: str) -> list:
         """
@@ -192,6 +198,7 @@ class Connection:
         await self._websocket.close()
         self._websocket = None
         self._players = {}  # this is why you shouldn't hold references to players for too long
+        logger.info('Disconnected from Lavalink and reset state.')
 
     async def wait_until_ready(self):
         """Waits indefinitely until the Lavalink connection has been established."""
@@ -200,6 +207,7 @@ class Connection:
 
     async def _send(self, **data):
         if not self.connected:
+            logger.debug('Refusing to send a payload to Lavalink due to websocket disconnection.')
             raise Disconnected()  # refuse to send anything
 
         if data.get('op') == 'validationRes' and data.get('valid') is False:  # player connection failure handling
@@ -210,6 +218,7 @@ class Connection:
                 data['guildId'] = str(data['guildId'])
             if isinstance(data.get('channelId'), int):
                 data['channelId'] = str(data['channelId'])
+        logger.debug('Sending a payload to Lavalink: {}'.format(data))
         await self._websocket.send(json.dumps(data))
 
     async def _discord_connect(self, guild_id: int, channel_id: int):
