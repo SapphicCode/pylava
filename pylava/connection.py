@@ -60,7 +60,7 @@ class Connection:
         while self.connected:
             try:
                 data = json.loads(await self._websocket.recv())
-            except websockets.ConnectionClosed or AttributeError:
+            except (websockets.ConnectionClosed, AttributeError):
                 return  # oh well
 
             logger.debug('Received a payload from Lavalink: {}'.format(data))
