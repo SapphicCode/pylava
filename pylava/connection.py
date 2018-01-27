@@ -98,8 +98,7 @@ class Connection:
                 continue
             if not ws.open:
                 continue
-            await ws.wait_for('READY', lambda x: True)
-            await asyncio.sleep(5)  # GUILD_CREATE events, etc
+            await asyncio.sleep(5)  # READY, RESUME, GUILD_CREATE events, etc
             break
 
         for guild in tuple(self._limbo):
