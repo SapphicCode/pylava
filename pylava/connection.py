@@ -13,8 +13,6 @@ from .player import Player
 
 logger = logging.getLogger('pylava')
 logger.addHandler(logging.NullHandler())
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler())
 
 
 class Connection:
