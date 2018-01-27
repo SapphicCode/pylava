@@ -13,6 +13,8 @@ from .player import Player
 
 logger = logging.getLogger('pylava')
 logger.addHandler(logging.NullHandler())
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
 
 
 class Connection:
@@ -31,6 +33,8 @@ class Connection:
         self._loop.create_task(self.connect())
 
         self._players = {}
+        self._limbo = {}
+        self._unlimbo_tasks = {}
 
         self.stats = {}
 
@@ -75,18 +79,48 @@ class Connection:
                 data.pop('op')
                 self.stats = data
 
-            if op == 'playerUpdate':
+            if op == 'playerUpdate' and 'position' in data['state']:
                 player = self.get_player(int(data['guildId']))
 
                 lag = time.time() - data['state']['time'] / 1000
                 player._position = data['state']['position'] / 1000 + lag
-                # (apparently player updates also get sent to paused players
-                # player._paused = False
             if op == 'event':
                 player = self.get_player(int(data['guildId']))
                 # noinspection PyProtectedMember
                 self._loop.create_task(player._process_event(data))
 
+    # noinspection PyProtectedMember
+    async def _unlimbo_shard(self, shard_id):
+        op_unpause = 0
+
+        while True:
+            await asyncio.sleep(0.1)
+            ws = self._get_discord_ws(shard_id)
+            if ws is None:
+                continue
+            if not ws.open:
+                continue
+            await ws.wait_for('READY', lambda x: True)
+            await asyncio.sleep(5)  # GUILD_CREATE events, etc
+            break
+
+        for guild in tuple(self._limbo):
+            sid = (guild >> 22) % self.bot.shard_count
+            if sid != shard_id:
+                continue
+
+            actions = self._limbo.pop(guild)
+            player = self._players.get(guild)
+            if player is None:
+                continue  # oh well
+
+            await player.connect(actions[0])
+            if op_unpause in actions:
+                await player.set_pause(False)
+
+        del self._unlimbo_tasks[shard_id]
+
+    # noinspection PyProtectedMember
     async def _discord_connection_handler(self):
         def panicking(shard_id):
             ws = self._get_discord_ws(shard_id)
@@ -94,24 +128,40 @@ class Connection:
                 return False
             return True
 
+        op_unpause = 0
+
         while self.connected:
             await asyncio.sleep(0.1)
 
             shards_to_check = {(x >> 22) % self.bot.shard_count for x in self._players}
             shards_panicking = [x for x in shards_to_check if panicking(x)]
 
-            if not shards_panicking:
-                continue
+            # pause relevant guilds
+            if shards_panicking:
+                for guild in tuple(self._players):
+                    if guild in self._limbo:  # we're aware of the issue, ignore
+                        continue
 
-            for guild in tuple(self._players):
-                if (guild >> 22) % self.bot.shard_count not in shards_panicking:
-                    continue
+                    sid = (guild >> 22) % self.bot.shard_count
 
-                player = self._players[guild]
-                if player is not None:
+                    if sid not in shards_panicking:
+                        continue
+
+                    player = self._players[guild]
+                    if not player._channel:
+                        continue
+
+                    ch = player._channel
                     await player.disconnect()
 
-                del self._players[guild]
+                    actions = [ch]
+                    if not player.paused:
+                        await player.set_pause(True)
+                        actions.append(op_unpause)
+                    self._limbo[guild] = actions
+
+                    if sid not in self._unlimbo_tasks:
+                        self._unlimbo_tasks[sid] = self._loop.create_task(self._unlimbo_shard(sid))
 
     async def _lava_validation_request(self, data):
         guild = self.bot.get_guild(int(data['guildId']))
