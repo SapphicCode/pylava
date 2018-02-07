@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Union
+from typing import Union, Optional
 
 import aiohttp
 import websockets
@@ -31,8 +31,7 @@ class Connection:
         self._loop.create_task(self.connect())
 
         self._players = {}
-        self._limbo = {}
-        self._unlimbo_tasks = {}
+        self._downed_shards = {}
 
         self.stats = {}
 
@@ -45,16 +44,48 @@ class Connection:
         if data['op'] != 0:
             return
 
-        if data['t'] != 'VOICE_SERVER_UPDATE':  # voice **SERVER**!!!!!! update! NOT STATE
-            return
+        if data['t'] == 'VOICE_SERVER_UPDATE':  # voice **SERVER**!!!!!! update! NOT STATE
+            payload = {
+                'op': 'voiceUpdate',
+                'guildId': data['d']['guild_id'],
+                'sessionId': self.bot.get_guild(int(data['d']['guild_id'])).me.voice.session_id,
+                'event': data['d']
+            }
+            await self._send(**payload)
 
-        payload = {
-            'op': 'voiceUpdate',
-            'guildId': data['d']['guild_id'],
-            'sessionId': self.bot.get_guild(int(data['d']['guild_id'])).me.voice.session_id,
-            'event': data['d']
-        }
-        await self._send(**payload)
+    async def _discord_connection_state_loop(self):
+        while self.connected:
+            shard_guild_map = {}
+            for guild in self._players:
+                if not self._players[guild].connected:
+                    continue
+
+                guild_shard_id = (guild >> 22) % self.bot.shard_count
+
+                if guild_shard_id not in shard_guild_map:
+                    shard_guild_map[guild_shard_id] = []
+                shard_guild_map[guild_shard_id].append(guild)
+
+            for shard, guilds in shard_guild_map.items():
+                ws = self._get_discord_ws(shard)
+                if not ws or not ws.open:
+                    self._downed_shards[shard] = True
+                    logger.debug('Shard {} detected as offline, handling...'.format(shard))
+                    continue
+
+                if self._downed_shards.get(shard):
+                    self._downed_shards.pop(shard)
+                    self._loop.create_task(self._discord_reconnect_task(guilds))
+                    logger.debug('Shard {} detected as online again, reconnecting guilds...'.format(shard))
+
+            await asyncio.sleep(0.1)
+
+    async def _discord_reconnect_task(self, guilds):
+        await asyncio.sleep(10)  # fixed wait for READY / RESUMED
+        for guild in guilds:
+            # noinspection PyProtectedMember
+            await self._players[guild].connect(self._players[guild]._channel)
+            await asyncio.sleep(1)  # 1 connection / second (gateway ratelimits = bad)
 
     async def _lava_event_processor(self):
         while self.connected:
@@ -65,13 +96,6 @@ class Connection:
 
             logger.debug('Received a payload from Lavalink: {}'.format(data))
             op = data.get('op')
-
-            if op == 'validationReq':
-                self._loop.create_task(self._lava_validation_request(data))
-            if op == 'isConnectedReq':
-                self._loop.create_task(self._lava_connection_request(data))
-            if op == 'sendWS':
-                self._loop.create_task(self._lava_forward_ws(data))
 
             if op == 'stats':
                 data.pop('op')
@@ -87,120 +111,12 @@ class Connection:
                 # noinspection PyProtectedMember
                 self._loop.create_task(player._process_event(data))
 
-    # noinspection PyProtectedMember
-    async def _unlimbo_shard(self, shard_id):
-        op_unpause = 0
-
-        while True:
-            await asyncio.sleep(0.1)
-            ws = self._get_discord_ws(shard_id)
-            if ws is None:
-                continue
-            if not ws.open:
-                continue
-            await asyncio.sleep(5)  # READY, RESUME, GUILD_CREATE events, etc
-            break
-
-        for guild in tuple(self._limbo):
-            sid = (guild >> 22) % self.bot.shard_count
-            if sid != shard_id:
-                continue
-
-            actions = self._limbo.pop(guild)
-            player = self._players.get(guild)
-            if player is None:
-                continue  # oh well
-
-            await player.connect(actions[0])
-            if op_unpause in actions:
-                await player.set_pause(False)
-
-        del self._unlimbo_tasks[shard_id]
-
-    # noinspection PyProtectedMember
-    async def _discord_connection_handler(self):
-        def panicking(shard_id):
-            ws = self._get_discord_ws(shard_id)
-            if ws is not None and ws.open:
-                return False
-            return True
-
-        op_unpause = 0
-
-        while self.connected:
-            await asyncio.sleep(0.1)
-
-            shards_to_check = {(x >> 22) % self.bot.shard_count for x in self._players}
-            shards_panicking = [x for x in shards_to_check if panicking(x)]
-
-            # pause relevant guilds
-            if shards_panicking:
-                for guild in tuple(self._players):
-                    if guild in self._limbo:  # we're aware of the issue, ignore
-                        continue
-
-                    sid = (guild >> 22) % self.bot.shard_count
-
-                    if sid not in shards_panicking:
-                        continue
-
-                    player = self._players[guild]
-                    if not player._channel:
-                        continue
-
-                    ch = player._channel
-                    await player.disconnect()
-
-                    actions = [ch]
-                    if not player.paused:
-                        await player.set_pause(True)
-                        actions.append(op_unpause)
-                    self._limbo[guild] = actions
-
-                    if sid not in self._unlimbo_tasks:
-                        self._unlimbo_tasks[sid] = self._loop.create_task(self._unlimbo_shard(sid))
-
-    async def _lava_validation_request(self, data):
-        guild = self.bot.get_guild(int(data['guildId']))
-        channel = data.get('channelId')
-
-        # guild-only check
-        if channel is None:
-            if guild is None:
-                return await self._send(op='validationRes', guildId=data['guildId'], valid=False)
-            return await self._send(op='validationRes', guildId=data['guildId'], valid=True)
-
-        # guild with channel and access check
-        channel = self.bot.get_channel(int(channel))
-        if channel is None:
-            return await self._send(op='validationRes', guildId=data['guildId'], channelId=data['channelId'],
-                                    valid=False)
-        if not guild.me.permissions_in(channel).connect:
-            return await self._send(op='validationRes', guildId=data['guildId'], channelId=data['channelId'],
-                                    valid=False)
-        await self._send(op='validationRes', guildId=data['guildId'], channelId=data['channelId'], valid=True)
-
     def _get_discord_ws(self, shard_id):
         if self._autosharded:
             return self.bot.shards[shard_id].ws
         if self.bot.shard_id is None or self.bot.shard_id == shard_id:
             # only return if the shard actually matches the current shard, useful for ignoring events not meant for us
             return self.bot.ws
-
-    async def _lava_connection_request(self, data):
-        # autosharded clients
-        ws = self._get_discord_ws(data['shardId'])
-        if ws is None:
-            return await self._send(op='isConnectedRes', shardId=data['shardId'], connected=False)
-        return await self._send(op='isConnectedRes', shardId=data['shardId'], connected=ws.open)
-
-    async def _lava_forward_ws(self, data):
-        ws = self._get_discord_ws(data['shardId'])
-        if ws is None:
-            return
-        if not ws.open:
-            return
-        await ws.send(data['message'])
 
     async def connect(self):
         """Connects to Lavalink. Gets automatically called once when the Connection object is created."""
@@ -212,7 +128,7 @@ class Connection:
         }
         self._websocket = await websockets.connect(self._url, extra_headers=headers)
         self._loop.create_task(self._lava_event_processor())
-        self._loop.create_task(self._discord_connection_handler())
+        self._loop.create_task(self._discord_connection_state_loop())
         logger.info('Successfully connected to Lavalink.')
 
     async def query(self, query: str) -> list:
@@ -259,9 +175,6 @@ class Connection:
             logger.debug('Refusing to send a payload to Lavalink due to websocket disconnection.')
             raise Disconnected()  # refuse to send anything
 
-        if data.get('op') == 'validationRes' and data.get('valid') is False:  # player connection failure handling
-            self.get_player(int(data['guildId']))._channel = None
-
         if isinstance(data, dict):
             if isinstance(data.get('guildId'), int):
                 data['guildId'] = str(data['guildId'])
@@ -270,29 +183,36 @@ class Connection:
         logger.debug('Sending a payload to Lavalink: {}'.format(data))
         await self._websocket.send(json.dumps(data))
 
-    async def _discord_connect(self, guild_id: int, channel_id: int):
-        await self._send(op='connect', guildId=guild_id, channelId=channel_id)
-
     async def _discord_disconnect(self, guild_id: int):
-        # sending the disconnect to Discord
-        # count = self.bot.shard_count if not self._autosharded else len(self.bot.shards)
-        # ws = self._get_discord_ws((guild_id >> 22) % count)
-        # disconnect_packet = {
-        #     'op': 4,
-        #     'd': {
-        #         'self_deaf': False,
-        #         'guild_id': str(guild_id),
-        #         'channel_id': None,
-        #         'self_mute': False
-        #     }
-        # }
-        # await ws.send(json.dumps(disconnect_packet))
+        shard_id = (guild_id >> 22) % self.bot.shard_count
+        await self._get_discord_ws(shard_id).send(json.dumps({
+            'op': 4,
+            'd': {
+                'self_deaf': False,
+                'guild_id': str(guild_id),
+                'channel_id': None,
+                'self_mute': False
+            }
+        }))
 
-        # sending the disconnect to lavalink (which *should* handle this but doesn't)
-        await self._send(op='disconnect', guildId=guild_id)
+    async def _discord_connect(self, guild_id: int, channel_id: int):
+        shard_id = (guild_id >> 22) % self.bot.shard_count
+        await self._get_discord_ws(shard_id).send(json.dumps({
+            'op': 4,
+            'd': {
+                'self_deaf': False,
+                'guild_id': str(guild_id),
+                'channel_id': str(channel_id),
+                'self_mute': False
+            }
+        }))
 
-    async def _discord_play(self, guild_id: int, track: str):
-        await self._send(op='play', guildId=guild_id, track=track)
+    async def _discord_play(self, guild_id: int, track: str, start_time: float, end_time: Optional[float]):
+        if end_time is not None:
+            await self._send(op='play', guildId=guild_id, track=track,
+                             startTime=int(start_time*1000), endTime=int(end_time*1000))
+        else:
+            await self._send(op='play', guildId=guild_id, track=track, startTime=int(start_time*1000))
 
     async def _discord_pause(self, guild_id: int, paused: bool):
         await self._send(op='pause', guildId=guild_id, pause=paused)
