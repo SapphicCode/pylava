@@ -146,7 +146,14 @@ class Connection:
         }
         async with aiohttp.ClientSession(headers=headers) as s:
             async with s.get(self._rest_url+'/loadtracks', params=params) as resp:
-                return await resp.json()
+                out = await resp.json()
+
+            if not out:  # edge case where lavalink just returns nothing
+                await asyncio.sleep(1)
+                async with s.get(self._rest_url+'/loadtracks', params=params) as resp:
+                    out = await resp.json()
+
+        return out
 
     @property
     def connected(self) -> bool:
