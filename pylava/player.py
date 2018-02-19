@@ -118,7 +118,7 @@ class Player:
 
             if not self.track_callback:
                 return
-            if isawaitable(self.track_callback):
-                await self.track_callback(self)
-            else:
-                self.track_callback(self)
+
+            out = self.track_callback(self)
+            if isawaitable(out):
+                await out
