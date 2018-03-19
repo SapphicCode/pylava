@@ -47,6 +47,8 @@ class Player:
     @property
     def playing(self) -> bool:
         """Returns the player's playing state."""
+        if self.paused:
+            return False  # can't be playing when paused can we
         return self._playing
 
     @property
