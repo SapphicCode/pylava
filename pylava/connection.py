@@ -131,11 +131,13 @@ class Connection:
         self._loop.create_task(self._discord_connection_state_loop())
         logger.info('Successfully connected to Lavalink.')
 
-    async def query(self, query: str) -> list:
+    async def query(self, query: str, *, retry_count=0, retry_delay=0) -> list:
         """
-        Queries Lavalink. Returns a list of Track objects.
+        Queries Lavalink. Returns a list of Track objects (dictionaries).
 
         :param query: The search query to make.
+        :param retry_count: How often to retry the query should it fail. 0 disables, -1 will try forever (dangerous).
+        :param retry_delay: How long to sleep for between retries.
         """
         headers = {
             'Authorization': self._auth,
@@ -145,13 +147,18 @@ class Connection:
             'identifier': query
         }
         async with aiohttp.ClientSession(headers=headers) as s:
-            async with s.get(self._rest_url+'/loadtracks', params=params) as resp:
-                out = await resp.json()
-
-            if not out:  # edge case where lavalink just returns nothing
-                await asyncio.sleep(1)
+            while True:
                 async with s.get(self._rest_url+'/loadtracks', params=params) as resp:
                     out = await resp.json()
+
+                # -1 is not recommended unless you run it as a task which you cancel after a specific time, but
+                # you do you devs
+                if not out and (retry_count > 0 or retry_count < 0):  # edge case where lavalink just returns nothing
+                    retry_count -= 1
+                    if retry_delay:
+                        await asyncio.sleep(retry_delay)
+                else:
+                    break
 
         return out
 
