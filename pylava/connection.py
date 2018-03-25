@@ -159,7 +159,6 @@ class Connection:
                         await asyncio.sleep(retry_delay)
                 else:
                     break
-
         return out
 
     @property
