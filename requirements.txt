@@ -1,3 +1,1 @@
-aiohttp>=2.0.0,<2.3.0
-websockets>=4.0,<5.0
-https://github.com/Rapptz/discord.py/archive/rewrite.zip#egg=discord.py
+discord.py>=1.0.0a1430
