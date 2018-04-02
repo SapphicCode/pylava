@@ -23,6 +23,7 @@ class Connection:
         self.bot = bot
         self._loop = bot.loop
         self._autosharded = isinstance(self.bot, commands.AutoShardedBot)
+        self._shard_count = self.bot.shard_count if self.bot.shard_count is not None else 1
         self._auth = password
         self._url = ws_url
         self._rest_url = rest_url
@@ -60,7 +61,7 @@ class Connection:
                 if not self._players[guild].connected:
                     continue
 
-                guild_shard_id = (guild >> 22) % self.bot.shard_count if self.bot.shard_count is not None else 1
+                guild_shard_id = (guild >> 22) % self._shard_count
 
                 if guild_shard_id not in shard_guild_map:
                     shard_guild_map[guild_shard_id] = []
@@ -123,7 +124,7 @@ class Connection:
         await self.bot.wait_until_ready()
         headers = {
             'Authorization': self._auth,
-            'Num-Shards': self.bot.shard_count if self.bot.shard_count is not None else 1,
+            'Num-Shards': self._shard_count,
             'User-Id': self.bot.user.id
         }
         self._websocket = await websockets.connect(self._url, extra_headers=headers)
@@ -197,10 +198,7 @@ class Connection:
         await self._websocket.send(json.dumps(data))
 
     async def _discord_disconnect(self, guild_id: int):
-        if self._autosharded:
-            shard_id = (guild_id >> 22) % self.bot.shard_count
-        else:
-            shard_id = self.bot.shard_id
+        shard_id = (guild_id >> 22) % self._shard_count
         await self._get_discord_ws(shard_id).send(json.dumps({
             'op': 4,
             'd': {
@@ -212,10 +210,7 @@ class Connection:
         }))
 
     async def _discord_connect(self, guild_id: int, channel_id: int):
-        if self._autosharded:
-            shard_id = (guild_id >> 22) % self.bot.shard_count
-        else:
-            shard_id = self.bot.shard_id
+        shard_id = (guild_id >> 22) % self._shard_count
         await self._get_discord_ws(shard_id).send(json.dumps({
             'op': 4,
             'd': {
