@@ -6,6 +6,8 @@ from discord import VoiceChannel, Guild
 
 # noinspection PyProtectedMember
 class Player:
+    __slots__ = ['conn', '_guild', '_channel', '_paused', '_playing', '_position', '_volume', 'track_callback']
+
     def __init__(self, connection, guild_id: int):
         self.conn = connection
         self._guild = guild_id
