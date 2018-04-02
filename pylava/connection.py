@@ -197,10 +197,10 @@ class Connection:
         await self._websocket.send(json.dumps(data))
 
     async def _discord_disconnect(self, guild_id: int):
-        if self.bot.shard_id is None and not self._autosharded:
+        if self._autosharded:
             shard_id = (guild_id >> 22) % self.bot.shard_count
         else:
-            shard_id = None
+            shard_id = self.bot.shard_id
         await self._get_discord_ws(shard_id).send(json.dumps({
             'op': 4,
             'd': {
@@ -212,10 +212,10 @@ class Connection:
         }))
 
     async def _discord_connect(self, guild_id: int, channel_id: int):
-        if self.bot.shard_id is None and not self._autosharded:
+        if self._autosharded:
             shard_id = (guild_id >> 22) % self.bot.shard_count
         else:
-            shard_id = None
+            shard_id = self.bot.shard_id
         await self._get_discord_ws(shard_id).send(json.dumps({
             'op': 4,
             'd': {
