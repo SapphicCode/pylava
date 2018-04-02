@@ -123,7 +123,7 @@ class Connection:
         await self.bot.wait_until_ready()
         headers = {
             'Authorization': self._auth,
-            'Num-Shards': self.bot.shard_count,
+            'Num-Shards': self.bot.shard_count if self.bot.shard_count is not None else 1,
             'User-Id': self.bot.user.id
         }
         self._websocket = await websockets.connect(self._url, extra_headers=headers)
