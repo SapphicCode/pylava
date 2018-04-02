@@ -60,7 +60,7 @@ class Connection:
                 if not self._players[guild].connected:
                     continue
 
-                guild_shard_id = (guild >> 22) % self.bot.shard_count
+                guild_shard_id = (guild >> 22) % self.bot.shard_count if self.bot.shard_count is not None else 1
 
                 if guild_shard_id not in shard_guild_map:
                     shard_guild_map[guild_shard_id] = []
