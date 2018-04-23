@@ -1,12 +1,12 @@
 from inspect import isawaitable
-from typing import Optional
+from typing import Optional, Callable
 
 from discord import VoiceChannel, Guild
 
 
 # noinspection PyProtectedMember
 class Player:
-    __slots__ = ['conn', '_guild', '_channel', '_paused', '_playing', '_position', '_volume', 'track_callback']
+    __slots__ = ['conn', '_guild', '_channel', '_paused', '_playing', '_position', '_volume', '_track_callback']
 
     def __init__(self, connection, guild_id: int):
         self.conn = connection
@@ -17,8 +17,7 @@ class Player:
         self._playing = False
         self._position = None
         self._volume = 100
-
-        self.track_callback = None  # you can set this one
+        self._track_callback = None
 
     @property
     def channel(self) -> Optional[VoiceChannel]:
@@ -29,6 +28,7 @@ class Player:
 
     @property
     def guild(self) -> Guild:
+        """Returns the player's guild."""
         return self.conn.bot.get_guild(self._guild)
 
     @property
@@ -62,6 +62,19 @@ class Player:
     def volume(self) -> int:
         """Returns the player's volume."""
         return self._volume
+
+    @property
+    def track_callback(self) -> Optional[Callable]:
+        """Accesses the track callback.
+
+        This is the callable that will be called with the current player's instance as its first argument.
+        It may be awaitable. If it is None, it will be ignored.
+        """
+        return self._track_callback
+
+    @track_callback.setter
+    def track_callback(self, c: Optional[Callable]):
+        self._track_callback = c
 
     async def connect(self, channel_id: int):
         """Connects the player to a Discord channel."""
