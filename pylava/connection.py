@@ -254,7 +254,7 @@ class Connection:
         :return: A Player instance for that guild.
         """
         if not isinstance(guild_id, int):
-            raise ValueError('Expected guild ID integer, got {}'.format(type(guild_id).__name__))
+            raise TypeError('Expected guild ID integer, got {}'.format(type(guild_id).__name__))
         player = self._players.get(guild_id)
         if player is None:
             player = Player(self, guild_id)
