@@ -45,6 +45,12 @@ class Connection:
         if data['op'] != 0:
             return
 
+        player = self.get_player(int(data['d']['guild_id']))
+        if not player._connecting:
+            return
+        else:
+            player._connecting = False
+
         if data['t'] == 'VOICE_SERVER_UPDATE':  # voice **SERVER**!!!!!! update! NOT STATE
             payload = {
                 'op': 'voiceUpdate',
