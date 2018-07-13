@@ -6,16 +6,13 @@ from discord import VoiceChannel, Guild
 
 # noinspection PyProtectedMember
 class Player:
-    __slots__ = [
-        'conn', '_guild', '_channel', '_paused', '_playing', '_position', '_volume', '_track_callback', '_connecting'
-    ]
+    __slots__ = ['conn', '_guild', '_channel', '_paused', '_playing', '_position', '_volume', '_track_callback']
 
     def __init__(self, connection, guild_id: int):
         self.conn = connection
         self._guild = guild_id
         # dynamic variables:
         self._channel = None
-        self._connecting = False
         self._paused = False
         self._playing = False
         self._position = None
@@ -81,7 +78,6 @@ class Player:
 
     async def connect(self, channel_id: int):
         """Connects the player to a Discord channel."""
-        self._connecting = True
         await self.conn._discord_connect(self._guild, channel_id)
         self._channel = channel_id
 
