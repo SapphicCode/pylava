@@ -46,6 +46,12 @@ class Connection:
             return
 
         if data['t'] == 'VOICE_SERVER_UPDATE':  # voice **SERVER**!!!!!! update! NOT STATE
+            player = self.get_player(int(data['d']['guild_id']))
+            if not player._connecting:
+                return
+            else:
+                player._connecting = False
+
             payload = {
                 'op': 'voiceUpdate',
                 'guildId': data['d']['guild_id'],
@@ -84,7 +90,6 @@ class Connection:
     async def _discord_reconnect_task(self, guilds):
         await asyncio.sleep(10)  # fixed wait for READY / RESUMED
         for guild in guilds:
-            # noinspection PyProtectedMember
             await self._players[guild].connect(self._players[guild]._channel)
             await asyncio.sleep(1)  # 1 connection / second (gateway ratelimits = bad)
 
@@ -109,7 +114,6 @@ class Connection:
                 player._position = data['state']['position'] / 1000 + lag
             if op == 'event':
                 player = self.get_player(int(data['guildId']))
-                # noinspection PyProtectedMember
                 self._loop.create_task(player._process_event(data))
 
     def _get_discord_ws(self, shard_id):
