@@ -1,4 +1,4 @@
-from inspect import isawaitable
+from inspect import isawaitable, signature
 from typing import Optional, Callable
 
 from discord import VoiceChannel, Guild
@@ -140,6 +140,14 @@ class Player:
             if not self.track_callback:
                 return
 
-            out = self.track_callback(self)
+            kwargs = {}
+            sig = signature(self.track_callback)
+            if sig:
+                if 'player' in sig.parameters:
+                    kwargs['player'] = self
+                if 'reason' in sig.parameters:
+                    kwargs['reason'] = data.get('reason')
+
+            out = self.track_callback(**kwargs)
             if isawaitable(out):
                 await out
