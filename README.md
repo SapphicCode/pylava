@@ -6,6 +6,11 @@ bots.
 
 Documentation can be found [here](https://pylava.readthedocs.io/en/latest/).
 
+## Version Compatability
+
+pylava is fully compatible with Lavalink version 2. It should hypothetically
+also work fine with version 3.
+
 ## Installation
 
 pylava is not on PyPi yet. As such, the preferred installation method is
